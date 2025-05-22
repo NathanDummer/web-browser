@@ -3,9 +3,6 @@ import ssl
 import pathlib
 import os
 
-# http 1.1 support
-# 
-
 default_path = r"C:\Users\natha\OneDrive\Desktop\default.txt"
 
 class URL:
@@ -15,24 +12,21 @@ class URL:
         self.scheme, url = url.split("://", 1)
         self.path = url
 
-        assert self.scheme in ("http", "https", "file")
+        assert self.scheme in ("http", "https", "file",)
 
         if self.scheme == "https":
             self.port = 443
         elif self.scheme == "http":
             self.port = 80
 
-        print(f'original path" {self.path}')
         if (self.path == "") or (self.path == "/"): self.path = default_path
-        print(f'unoriginal path" {self.path}')
-
+        
         if '/' not in url:
             url += '/'
         
         self.host, url = url.split('/', 1)
         if self.path and self.path[0] != '/': self.path = '/' + self.path
 
-        print(f'unoriginal path" {self.path}')
         # custom port handling
         if ":" in self.host:
             self.host, port = self.host.split(":", 1)
@@ -42,7 +36,7 @@ class URL:
     def request(self): 
 
         if self.scheme == "file":
-            # file handling
+            # local file handling
             path = os.path.join(pathlib.Path.home(), self.path[1:])
             print(f'\n{path}\n')
             if not os.path.exists(path):
@@ -97,13 +91,31 @@ class URL:
 def show(body):
 
     in_tag = False
-    for c in body:
+    i = 0
+    while i < len(body):
+        c = body[i]
         if c == "<":
             in_tag = True
         elif c == ">":
             in_tag = False
+        elif c == "&":
+            if body[i+3]:
+                if body[i+1:i+4] == "lt;":
+                    in_tag = True
+                    i += 3
+                elif body[i+1:i+4] == "gt;":
+                    in_tag = False
+                    i += 3
+                elif not in_tag:
+                    print(c, end="")
+
+            elif not in_tag:
+                print(c, end="")
+
         elif not in_tag:
             print(c, end="")
+        i += 1
+
 
 def load(url):
     body = url.request()
