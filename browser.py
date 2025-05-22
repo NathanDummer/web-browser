@@ -1,31 +1,55 @@
 import socket
 import ssl
+import pathlib
+import os
+
+# http 1.1 support
+# 
+
+default_path = r"C:\Users\natha\OneDrive\Desktop\default.txt"
 
 class URL:
     def __init__(self, url):
 
         # splits request type and hostname
         self.scheme, url = url.split("://", 1)
-        assert self.scheme in ("http", "https")
+        self.path = url
+
+        assert self.scheme in ("http", "https", "file")
 
         if self.scheme == "https":
             self.port = 443
         elif self.scheme == "http":
             self.port = 80
-        
+
+        print(f'original path" {self.path}')
+        if (self.path == "") or (self.path == "/"): self.path = default_path
+        print(f'unoriginal path" {self.path}')
+
         if '/' not in url:
             url += '/'
         
         self.host, url = url.split('/', 1)
-        self.path = '/' + url
+        if self.path and self.path[0] != '/': self.path = '/' + self.path
 
+        print(f'unoriginal path" {self.path}')
         # custom port handling
         if ":" in self.host:
             self.host, port = self.host.split(":", 1)
             self.port = int(port)
 
 
-    def request(self):
+    def request(self): 
+
+        if self.scheme == "file":
+            # file handling
+            path = os.path.join(pathlib.Path.home(), self.path[1:])
+            print(f'\n{path}\n')
+            if not os.path.exists(path):
+                raise FileNotFoundError(f"File not found: {path}")
+            with open(path, 'r') as f:
+                return f.read()
+            
         s = socket.socket(
             family=socket.AF_INET,
             type=socket.SOCK_STREAM,
@@ -33,13 +57,15 @@ class URL:
         )
 
         s.connect((self.host, self.port))
-        if self.scheme == "https":
+        if self.scheme == "https": 
             # wrapping with ssl library
             ctx = ssl.create_default_context()
             s = ctx.wrap_socket(s, server_hostname=self.host)
 
         request = f"GET {self.path} HTTP/1.0\r\n"
         request += f"Host: {self.host}\r\n"
+        request += "User-Agent: NathansBeautifulBrowser\r\n"
+        request += "Connection: close\r\n"
         request += "\r\n"                       # two newlines to end the headers
 
         s.send(request.encode("utf8"))
