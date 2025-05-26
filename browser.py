@@ -3,7 +3,49 @@ import ssl
 import pathlib
 import os
 
+import tkinter as tk
+
 default_path = r"C:\Users\natha\OneDrive\Desktop\default.txt"
+WIDTH, HEIGHT = 800, 600
+SCROLL_STEP = 100
+
+class Browser:
+    def __init__(self):
+        self.window = tk.Tk()
+        self.canvas = tk.Canvas(
+            self.window, 
+            width=WIDTH,
+            height=HEIGHT
+        )
+        self.canvas.pack()
+        self.window.title("Nathan's Beautiful Browser")
+        self.scroll = 0
+        self.window.bind("<Down>", self.scrolldown)
+        self.window.bind("<MouseWheel>", self.on_mousewheel)
+        
+
+    def draw(self):
+        self.canvas.delete("all")
+        HSTEP, VSTEP = 13, 18
+
+        for x, y, c in self.display_list:
+            if y > self.scroll + HEIGHT: continue
+            if y + VSTEP < self.scroll: continue
+            self.canvas.create_text(x, y - self.scroll, text=c)
+
+    def load(self, url):
+        body = url.request()
+        text = lex(body)
+        self.display_list = layout(text)
+        self.draw()
+
+    def scrolldown(self, e):
+        self.scroll += SCROLL_STEP
+        self.draw()
+
+    def on_mousewheel(self, event):
+        self.scroll += int(-1 * (event.delta / 120) * SCROLL_STEP)
+        self.draw()
 
 class URL:
     def __init__(self, url):
@@ -18,14 +60,13 @@ class URL:
             self.port = 443
         elif self.scheme == "http":
             self.port = 80
-
-        if (self.path == "") or (self.path == "/"): self.path = default_path
+        
         
         if '/' not in url:
             url += '/'
         
         self.host, url = url.split('/', 1)
-        if self.path and self.path[0] != '/': self.path = '/' + self.path
+        self.path = '/' + url
 
         # custom port handling
         if ":" in self.host:
@@ -38,11 +79,12 @@ class URL:
         if self.scheme == "file":
             # local file handling
             path = os.path.join(pathlib.Path.home(), self.path[1:])
-            print(f'\n{path}\n')
+            
             if not os.path.exists(path):
                 raise FileNotFoundError(f"File not found: {path}")
             with open(path, 'r') as f:
                 return f.read()
+
             
         s = socket.socket(
             family=socket.AF_INET,
@@ -60,7 +102,7 @@ class URL:
         request += f"Host: {self.host}\r\n"
         request += "User-Agent: NathansBeautifulBrowser\r\n"
         request += "Connection: close\r\n"
-        request += "\r\n"                       # two newlines to end the headers
+        request += "\r\n"  # two newlines to end the headers
 
         s.send(request.encode("utf8"))
 
@@ -88,9 +130,10 @@ class URL:
 
         return content
 
-def show(body):
-
+def lex(body):
+    text = ""
     in_tag = False
+
     i = 0
     while i < len(body):
         c = body[i]
@@ -107,20 +150,40 @@ def show(body):
                     in_tag = False
                     i += 3
                 elif not in_tag:
-                    print(c, end="")
+                    text += c
 
             elif not in_tag:
-                print(c, end="")
+                text += c
 
         elif not in_tag:
-            print(c, end="")
+            text += c
         i += 1
+        
+    return text
 
+def layout(text):
+    display_list = []
+    HSTEP, VSTEP = 13, 18
+    cursor_x, cursor_y = HSTEP, VSTEP
+    
+    for c in text:
+        display_list.append((cursor_x, cursor_y, c))
+        cursor_x += HSTEP
 
-def load(url):
-    body = url.request()
-    show(body)
+        # newline handling
+        if cursor_x >= WIDTH - HSTEP:
+            cursor_y += VSTEP
+            cursor_x = HSTEP
+    return display_list
 
 if __name__ == "__main__":
     import sys
-    load(URL(sys.argv[1]))
+
+    # if no URL browser opens default file
+    if len(sys.argv) > 1:
+        url = URL(sys.argv[1])
+    else:
+        url = URL("file:///" + default_path.replace("\\", "/"))
+
+    Browser().load(url)
+    tk.mainloop()
