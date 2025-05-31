@@ -4,10 +4,106 @@ import pathlib
 import os
 
 import tkinter as tk
+import tkinter.font
 
 default_path = r"C:\Users\natha\OneDrive\Desktop\default.txt"
 WIDTH, HEIGHT = 800, 600
 SCROLL_STEP = 100
+HSTEP, VSTEP = 13, 18
+
+class Text: 
+    def __init__(self, text):
+        self.text = text
+
+class Tag:
+    def __init__(self, tag):
+        self.tag = tag
+
+class Layout:
+    def __init__(self, tokens):
+        self.display_list = []
+        self.cursor_x = HSTEP
+        self.cursor_y = VSTEP
+        self.weight = "normal"
+        self.style = "roman"
+        self.size = 12
+
+        
+        self.line = []
+
+        for tok in tokens:
+            self.token(tok)
+        self.flush()
+
+    # aligns along baseline, adds all words to display list, and updates cursor fields
+    def flush(self):
+        if not self.line: return
+
+        metrics = [font.metrics() for x, word, font in self.line]
+        max_ascent = max([metric["ascent"] for metric in metrics])
+        baseline = self.cursor_y + 1.25 * max_ascent
+
+        for x, word, font in self.line:
+            y = baseline - font.metrics("ascent")
+            self.display_list.append((x, y, word, font))
+
+        max_descent = max([metric["descent"] for metric in metrics])
+        self.cursor_y = baseline + 1.25 * max_descent
+
+        self.cursor_x = HSTEP
+        self.line = []
+
+    def word(self, word):
+        
+        font = tkinter.font.Font(
+            size=self.size,
+            weight=self.weight,
+            slant=self.style,
+        )
+
+        w = font.measure(word)
+
+        if self.cursor_x + w >= WIDTH - HSTEP:
+            self.flush()
+
+        # if self.cursor_x + w >= WIDTH - HSTEP:
+        #     self.cursor_y += font.metrics("linespace") * 1.25
+        #     self.cursor_x = HSTEP
+
+        self.line.append((self.cursor_x, word, font))
+
+        # self.display_list.append((self.cursor_x, self.cursor_y, word, font))
+        self.cursor_x += w + font.measure(" ")
+
+        
+
+    def token(self, tok):
+        if isinstance(tok, Text):
+            for word in tok.text.split():
+                self.word(word)
+
+        elif tok.tag == "i":
+            self.style = "italic"
+        elif tok.tag == "/i":
+            self.style = "roman"
+        elif tok.tag == "b":
+            self.weight = "bold"
+        elif tok.tag == "/b":
+            self.weight = "normal"
+        elif tok.tag == "small":
+            self.size -= 2
+        elif tok.tag == "/small":
+            self.size += 2
+        elif tok.tag == "big":
+            self.size += 4
+        elif tok.tag == "/big":
+            self.size -= 4
+        elif tok.tag == "br":
+            self.flush()    
+        elif tok.tag == "/p":
+            self.flush()
+            self.cursor_y += VSTEP
+
 
 class Browser:
     def __init__(self):
@@ -17,6 +113,7 @@ class Browser:
             width=WIDTH,
             height=HEIGHT
         )
+
         self.canvas.pack()
         self.window.title("Nathan's Beautiful Browser")
         self.scroll = 0
@@ -26,17 +123,19 @@ class Browser:
 
     def draw(self):
         self.canvas.delete("all")
-        HSTEP, VSTEP = 13, 18
+        # HSTEP, VSTEP = 13, 18
 
-        for x, y, c in self.display_list:
+        for x, y, c, f in self.display_list:
             if y > self.scroll + HEIGHT: continue
             if y + VSTEP < self.scroll: continue
-            self.canvas.create_text(x, y - self.scroll, text=c)
 
+            # print(f"Drawing text: {c} at ({x}, {y}) with font {f}")
+            self.canvas.create_text(x, y - self.scroll, text=c, font=f, anchor="nw")
+            
     def load(self, url):
         body = url.request()
         text = lex(body)
-        self.display_list = layout(text)
+        self.display_list = Layout(text).display_list
         self.draw()
 
     def scrolldown(self, e):
@@ -131,50 +230,86 @@ class URL:
         return content
 
 def lex(body):
-    text = ""
+    out = []
+    buffer = ""
     in_tag = False
 
     i = 0
     while i < len(body):
         c = body[i]
+
         if c == "<":
             in_tag = True
+            if buffer: out.append(Text(buffer))
+            buffer = ""
+
         elif c == ">":
             in_tag = False
-        elif c == "&":
-            if body[i+3]:
-                if body[i+1:i+4] == "lt;":
-                    in_tag = True
-                    i += 3
-                elif body[i+1:i+4] == "gt;":
-                    in_tag = False
-                    i += 3
-                elif not in_tag:
-                    text += c
+            out.append(Tag(buffer))
+            buffer = ""
 
-            elif not in_tag:
-                text += c
+        # elif c == "&":
+        #     if body[i+3]:
+        #         if body[i+1:i+4] == "lt;":
+        #             in_tag = True
+        #             if buffer: out.append(Text(buffer))
+        #             buffer = ""
+        #             i += 3
 
-        elif not in_tag:
-            text += c
+        #         elif body[i+1:i+4] == "gt;":
+        #             in_tag = False
+        #             out.append(Tag(buffer))
+        #             buffer = ""
+        #             i += 3
+
+        #         else:
+        #             buffer += c
+        #     else:
+        #         buffer += c
+        else:
+            buffer += c
         i += 1
-        
-    return text
 
-def layout(text):
-    display_list = []
-    HSTEP, VSTEP = 13, 18
-    cursor_x, cursor_y = HSTEP, VSTEP
+    if not in_tag and buffer: out.append(Text(buffer))
+    return out
+
+# def layout(tokens):
+#     font = tkinter.font.Font()
+#     display_list = []
+#     weight = "normal"
+#     style = "roman"
+#     HSTEP, VSTEP = 13, 18
+#     cursor_x, cursor_y = HSTEP, VSTEP
     
-    for c in text:
-        display_list.append((cursor_x, cursor_y, c))
-        cursor_x += HSTEP
+#     for tok in tokens:
+#         if isinstance(tok, Text):
+#             for word in tok.text.split():
+#                 font = tkinter.font.Font(
+#                     size=16,
+#                     weight=weight,
+#                     slant=style,
+#                 )
 
-        # newline handling
-        if cursor_x >= WIDTH - HSTEP:
-            cursor_y += VSTEP
-            cursor_x = HSTEP
-    return display_list
+#                 w = font.measure(word)
+
+#                 if cursor_x + w >= WIDTH - HSTEP:
+#                     cursor_y += font.metrics("linespace") * 1.25
+#                     cursor_x = HSTEP
+        
+#                 display_list.append((cursor_x, cursor_y, word, font))
+#                 cursor_x += w + font.measure(" ")
+
+#         elif tok.tag == "i":
+#             style = "italic"
+#         elif tok.tag == "/i":
+#             style = "roman"
+#         elif tok.tag == "b":
+#             weight = "bold"
+#         elif tok.tag == "/b":
+#             weight = "normal"
+        
+#     return display_list
+
 
 if __name__ == "__main__":
     import sys
