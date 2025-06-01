@@ -11,6 +11,8 @@ WIDTH, HEIGHT = 800, 600
 SCROLL_STEP = 100
 HSTEP, VSTEP = 13, 18
 
+FONTS = {}
+
 class Text: 
     def __init__(self, text):
         self.text = text
@@ -54,28 +56,17 @@ class Layout:
         self.line = []
 
     def word(self, word):
-        
-        font = tkinter.font.Font(
-            size=self.size,
-            weight=self.weight,
-            slant=self.style,
-        )
 
+        # returns font object
+        font = get_font(self.size, self.weight, self.style)
         w = font.measure(word)
 
         if self.cursor_x + w >= WIDTH - HSTEP:
             self.flush()
 
-        # if self.cursor_x + w >= WIDTH - HSTEP:
-        #     self.cursor_y += font.metrics("linespace") * 1.25
-        #     self.cursor_x = HSTEP
 
         self.line.append((self.cursor_x, word, font))
-
-        # self.display_list.append((self.cursor_x, self.cursor_y, word, font))
         self.cursor_x += w + font.measure(" ")
-
-        
 
     def token(self, tok):
         if isinstance(tok, Text):
@@ -123,13 +114,10 @@ class Browser:
 
     def draw(self):
         self.canvas.delete("all")
-        # HSTEP, VSTEP = 13, 18
-
+        
         for x, y, c, f in self.display_list:
             if y > self.scroll + HEIGHT: continue
             if y + VSTEP < self.scroll: continue
-
-            # print(f"Drawing text: {c} at ({x}, {y}) with font {f}")
             self.canvas.create_text(x, y - self.scroll, text=c, font=f, anchor="nw")
             
     def load(self, url):
@@ -248,24 +236,24 @@ def lex(body):
             out.append(Tag(buffer))
             buffer = ""
 
-        # elif c == "&":
-        #     if body[i+3]:
-        #         if body[i+1:i+4] == "lt;":
-        #             in_tag = True
-        #             if buffer: out.append(Text(buffer))
-        #             buffer = ""
-        #             i += 3
+        elif c == "&":
+            if body[i+3]:
+                if body[i+1:i+4] == "lt;":
+                    in_tag = True
+                    if buffer: out.append(Text(buffer))
+                    buffer = ""
+                    i += 3
 
-        #         elif body[i+1:i+4] == "gt;":
-        #             in_tag = False
-        #             out.append(Tag(buffer))
-        #             buffer = ""
-        #             i += 3
+                elif body[i+1:i+4] == "gt;":
+                    in_tag = False
+                    out.append(Tag(buffer))
+                    buffer = ""
+                    i += 3
 
-        #         else:
-        #             buffer += c
-        #     else:
-        #         buffer += c
+                else:
+                    buffer += c
+            else:
+                buffer += c
         else:
             buffer += c
         i += 1
@@ -273,43 +261,15 @@ def lex(body):
     if not in_tag and buffer: out.append(Text(buffer))
     return out
 
-# def layout(tokens):
-#     font = tkinter.font.Font()
-#     display_list = []
-#     weight = "normal"
-#     style = "roman"
-#     HSTEP, VSTEP = 13, 18
-#     cursor_x, cursor_y = HSTEP, VSTEP
-    
-#     for tok in tokens:
-#         if isinstance(tok, Text):
-#             for word in tok.text.split():
-#                 font = tkinter.font.Font(
-#                     size=16,
-#                     weight=weight,
-#                     slant=style,
-#                 )
-
-#                 w = font.measure(word)
-
-#                 if cursor_x + w >= WIDTH - HSTEP:
-#                     cursor_y += font.metrics("linespace") * 1.25
-#                     cursor_x = HSTEP
-        
-#                 display_list.append((cursor_x, cursor_y, word, font))
-#                 cursor_x += w + font.measure(" ")
-
-#         elif tok.tag == "i":
-#             style = "italic"
-#         elif tok.tag == "/i":
-#             style = "roman"
-#         elif tok.tag == "b":
-#             weight = "bold"
-#         elif tok.tag == "/b":
-#             weight = "normal"
-        
-#     return display_list
-
+# font cahing functionality
+def get_font(size, weight, style):
+    key = (size, weight, style)
+    if key not in FONTS:
+        font = tkinter.font.Font(size=size, weight=weight,
+            slant=style)
+        label = tkinter.Label(font=font)
+        FONTS[key] = (font, label)
+    return FONTS[key][0]
 
 if __name__ == "__main__":
     import sys
